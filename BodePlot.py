@@ -8,6 +8,7 @@ Original project by ailr16.
 Features: 
 > 	Amplitude and phase semilogarithmic plots
 >   Average acquisition mode, with 4 waves average
+	TODO: CHECK AVERGA MODE FOR f<1hz
 >	Logaritmic or linear frequencies span 
 >	Automated setup
 >	PARTIALLY TODO: Automated restore of the previous acquisition settings
@@ -54,7 +55,7 @@ freqSteps = 20   	#Number of frequencies steps
 waveVMax = 5 	 	#Wave Max Voltage
 logAnalysis = True	#Log spaced frequencis if True, Linearly spaced frequencies if false
 
-fixedTimeDelay = 4  #Adjust the time delay between frequency increments [s]
+fixedTimeDelay = 2  #Adjust the time delay between frequency increments [s]
 
 # INSTREUMENTS CONNECTIONS PORT
 scopeAddres='USB0::0x1AB1::0x04CE::DS1ZA223107793::INSTR' #Rigol 1054Z Address
@@ -211,14 +212,15 @@ while i < freqSteps:
 	
 	while(1):		
 		#Check for over or under-resolution (clipping or too low resolution)
-		time.sleep(1.5)
+		time.sleep(timeDelay)
 		vRead = float(scope.query("MEASure:ITEM? VMAX,CHANnel2")) #read voltage
 		if vRead<realVerticalResCH2*4 or vRead>realVerticalResCH2*7.90: #clipping
 			verticalResCH2=numpy.round(vRead/8*1.3,2)
+			#print("Clip or undervoltage")
 		else:
 			break
-		if timeDelay<fixedTimeDelay:
-			timeDelay = fixedTimeDelay 
+		if verticalResCH2<0.001: #check for minimum limits
+			verticalResCH2=0.001 
 		oldScale = float(scope.query("CHANnel2:SCALe?"))            #check last scale
 		scope.write("CHANnel2:SCALe ",str(verticalResCH2))          #set the vertical scale
 		realVerticalResCH2=float(scope.query("CHANnel2:SCALe?"))    #check setted value
@@ -227,7 +229,7 @@ while i < freqSteps:
 			break
 
 	'''TAKE THE MEASUREMENT'''
-	time.sleep(timeDelay)						#Time delay - wait for measaurement
+	time.sleep(0.5)						#Time delay - wait for measaurement
 	CH1VMax[i] = scope.query("MEASure:ITEM? VMAX,CHANnel1")			#Read and save CH1 VMax
 	CH2VMax[i] = scope.query("MEASure:ITEM? VMAX,CHANnel2")			#Read and save CH2 VMax
 	PHASE[i] = scope.query("MEASure:ITEM? RPHase,CHANnel2,CHANnel1")#read phase between CH1 and CH2
