@@ -1,20 +1,17 @@
-# BodePlot
- Bode Plot With RIGOL DS1054 and FeelTech FY32xx
-IGOL DS1054Z - FEELTECH FY32xx AUTOMATED FREQUENCY RESPONSE ANALYSIS
-Francesco Nastrucci - frenzi37i - 10/01/2021
+#RIGOL DS1054Z - FEELTECH FY32xx AUTOMATED FREQUENCY RESPONSE ANALYSIS
+###Francesco Nastrucci - frenzi37i - 10/01/2021
 
 FORK OF https://github.com/ailr16/BodePlot-DS1054Z
 Original project by ailr16.
 
 Features: 
-> 	Amplitude and phase semilogarithmic plots
->   Average acquisition mode, with 4 waves average
->	Logaritmic or linear frequencies span 
->	Automated setup
->	Automated restore of the previous acquisition settings
->	Automated fine adjustment of the vertical scale, for maximized voltage sensitivity, with clipping detection 
->   Each measurements is done in a fixed time of 5 seconds; for lower frequencies the measurement 
-	time is automatically increased in order to acquire at least 4 complete screen
+.   Amplitude and phase semilogarithmic plots
+.   Average acquisition mode, with 4 waves average
+.   Logaritmic or linear frequencies span 
+.   Automated insatrument setup
+.   Automated restore of the previous acquisition settings
+.   Automated fine adjustment of the vertical scale, for maximized voltage sensitivity,      with clipping detection 
+.   Each measurements is done in a fixed time of 5 seconds; for lower frequencies the     measurement time is automatically increased in order to acquire at least 4 complete screen
 
 ________________________________________________________________________________________________
 Use: 
