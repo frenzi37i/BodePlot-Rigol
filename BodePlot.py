@@ -50,9 +50,9 @@ import math
 ###################################################################################
 ###############################  USER SETTINGS ####################################
 # ANALYSIS PARAMETERS 
-startFreq = 5   	#Start frequency [Hz]
-endFreq = 1000  	#Stop frequency [Hz]
-freqSteps = 20   	#Number of frequencies steps
+startFreq = 1.5   	#Start frequency [Hz]
+endFreq = 100  	#Stop frequency [Hz]
+freqSteps = 10   	#Number of frequencies steps
 waveVMax = 5 	 	#Wave Max Voltage
 logAnalysis = True	#Log spaced frequencis if True, Linearly spaced frequencies if false
 
