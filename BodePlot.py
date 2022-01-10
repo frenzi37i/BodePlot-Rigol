@@ -38,6 +38,7 @@ ________________________________________________________________________________
 
 '''
 
+from numpy.core.fromnumeric import mean
 import pyvisa
 import feeltech
 import time
@@ -55,7 +56,7 @@ freqSteps = 20   	#Number of frequencies steps
 waveVMax = 5 	 	#Wave Max Voltage
 logAnalysis = True	#Log spaced frequencis if True, Linearly spaced frequencies if false
 
-fixedTimeDelay = 2  #Adjust the time delay between frequency increments [s]
+fixedTimeDelay = 3  #Adjust the time delay between frequency increments [s]
 
 # INSTREUMENTS CONNECTIONS PORT
 scopeAddres='USB0::0x1AB1::0x04CE::DS1ZA223107793::INSTR' #Rigol 1054Z Address
@@ -105,6 +106,7 @@ CH2VMax = numpy.zeros(freqSteps)				#Create an array for CH2 measurements
 PHASE = numpy.zeros(freqSteps)               	#Create an array for PHASE measurements
 db = numpy.zeros(freqSteps)						#Create an array for the result in db
 freqVect = numpy.zeros(freqSteps)				#Create an array for values of frequency
+lastScale = numpy.zeros(freqSteps)
 
 #LOGARITHMIC SPACED FREQUENCIES
 if logAnalysis==True: 
@@ -200,8 +202,14 @@ while i < freqSteps:
 	'''AUTOSCALE CH2 VERTICAL SCALE'''
 	#print("Adjusting CH2 vertical scale...") #verbosity
 	#Set CH2 vertical scale to the maximum voltage, and reference at the bottom of the screen
-	scope.write("CHANnel2:SCALe 10")  
-	scope.write("CHANnel2:OFFSet -38")
+	if i>1: #after 2 cycles, starts from the mean value
+		verticalResCH2=(lastScale[i-2]+lastScale[i-1])/2
+		scope.write("CHANnel2:SCALe ",str(verticalResCH2))          #set the vertical scale
+		realVerticalResCH2 = float(scope.query("CHANnel2:SCALe?"))
+		scope.write("CHANnel2:OFFSet ",str(-realVerticalResCH2*4*0.99)) #set the offset near 0 at the bottom of the screen
+	else:
+		scope.write("CHANnel2:SCALe 10")  
+		scope.write("CHANnel2:OFFSet -38")
 
 	time.sleep(1)
 	vRead = float(scope.query("MEASure:ITEM? VMAX,CHANnel2")) #first reading 
@@ -234,6 +242,7 @@ while i < freqSteps:
 	CH2VMax[i] = scope.query("MEASure:ITEM? VMAX,CHANnel2")			#Read and save CH2 VMax
 	PHASE[i] = scope.query("MEASure:ITEM? RPHase,CHANnel2,CHANnel1")#read phase between CH1 and CH2
 	
+	lastScale[i]=realVerticalResCH2; #save last vertical scale
 	i = i + 1							#Increment index
 
 print("\nMEASURE COMPLETED")
