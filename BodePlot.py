@@ -10,7 +10,7 @@ Features:
 >   Average acquisition mode, with 4 waves average
 >	Logaritmic or linear frequencies span 
 >	Automated setup
->	Automated restore of the previous acquisition settings
+>	PARTIALLY TODO: Automated restore of the previous acquisition settings
 >	Automated fine adjustment of the vertical scale, for maximized voltage sensitivity, with clipping detection 
 >   Each measurements is done in a fixed time of 5 seconds; for lower frequencies the measurement 
 	time is automatically increased in order to acquire at least 4 complete screen
@@ -48,13 +48,13 @@ import math
 ###################################################################################
 ###############################  USER SETTINGS ####################################
 # ANALYSIS PARAMETERS 
-startFreq = 10   	#Start frequency [Hz]
-endFreq = 10000  	#Stop frequency [Hz]
-freqSteps = 10   	#Number of frequencies steps
+startFreq = 5   	#Start frequency [Hz]
+endFreq = 1000  	#Stop frequency [Hz]
+freqSteps = 20   	#Number of frequencies steps
 waveVMax = 5 	 	#Wave Max Voltage
 logAnalysis = True	#Log spaced frequencis if True, Linearly spaced frequencies if false
 
-fixedTimeDelay = 5  #Adjust the time delay between frequency increments [s]
+fixedTimeDelay = 4  #Adjust the time delay between frequency increments [s]
 
 # INSTREUMENTS CONNECTIONS PORT
 scopeAddres='USB0::0x1AB1::0x04CE::DS1ZA223107793::INSTR' #Rigol 1054Z Address
@@ -137,6 +137,10 @@ origAcqMode=r[r.find("'")+1:r.find("\\")]   #extract current mode
 scope.write("ACQuire:TYPE AVERages") 		#set acquisition mode on average
 scope.write("ACQuire:AVERages 4") 			#Set 4 cycle average 
 
+'''CHANNEL COUPLING SETUP'''
+scope.write("CHANnel1:COUPling AC") 			#set AC coupling
+scope.write("CHANnel2:COUPling AC") 			
+
 ''' INITIAL VERTICAL SCALE SETUP'''
 #Store old vernier mode settings (fine scale setting)
 scope.write("CHANnel1:VERNier?") 
@@ -179,6 +183,7 @@ print("\nMEASURE STARTED")
 
 i = 0
 while i < freqSteps:
+	print(numpy.floor(100*((i+1)/freqSteps)),"% - Analyzing ",numpy.round(freqVect[i],2)," Hz")   #print completed process percentage
 
 	'''FREQUENCY AND HORIZONTAL SCALE SETUP'''
 	freq = freqVect[i]                      #Set frequency 
@@ -192,56 +197,34 @@ while i < freqSteps:
 		timeDelay = fixedTimeDelay 
 
 	'''AUTOSCALE CH2 VERTICAL SCALE'''
-	#time.sleep(timeDelay/8) #sleep a while and read the current voltage of the output (CH2)
-	#outVMAX = float(scope.query("MEASure:ITEM? VMAX,CHANnel2")) #read the top voltage
-	#verticalResCH2=numpy.round(outVMAX/8*1.15,2)                #calculate the wanted resolution
-	#if verticalResCH2==0:                                       #avoid too low resolutions
-	#	verticalResCH2=0.001  
-	#scope.write("CHANnel2:SCALe ",str(verticalResCH2))          #set CH2 vertical resoultion
-	#scope.write("CHANnel2:OFFSet ",str(-verticalResCH2*4*0.99)) #set CH2 offset
-	outVMAX = float(scope.query("MEASure:ITEM? VMAX,CHANnel2")) #read the top voltage
-	verticalResCH2=numpy.round(outVMAX/8*1.15,2)                #calculate the wanted resolution
-	if verticalResCH2==0:                                       #avoid too low resolutions
-		verticalResCH2=0.001  
+	#print("Adjusting CH2 vertical scale...") #verbosity
+	#Set CH2 vertical scale to the maximum voltage, and reference at the bottom of the screen
+	scope.write("CHANnel2:SCALe 10")  
+	scope.write("CHANnel2:OFFSet -38")
+
+	time.sleep(1)
+	vRead = float(scope.query("MEASure:ITEM? VMAX,CHANnel2")) #first reading 
+	verticalResCH2=numpy.round(vRead/8*2,2)
+	scope.write("CHANnel2:SCALe ",str(verticalResCH2))          #set the vertical scale
+	realVerticalResCH2 = float(scope.query("CHANnel2:SCALe?"))
+	scope.write("CHANnel2:OFFSet ",str(-realVerticalResCH2*4*0.99)) #set the offset near 0 at the bottom of the screen
 	
-	scope.write("CHANnel2:SCALe ",str(verticalResCH2))          #set CH2 vertical resoultion
-	scope.write("CHANnel2:OFFSet ",str(-verticalResCH2*4*0.99)) #set CH2 offset
-
-	'''CLIPPING DETECTION '''
-	j=0
-	k=0
-	while(1): 
-		vCheck = float(scope.query("MEASure:ITEM? VMAX,CHANnel2")) #re-read the top voltage to check for clipping
-		#if the readed signal is < of the 1% of the vertical scale or is greater than the full screen resolution, 
-		#CH2 signal is near to clip or clipped, so we have to increment the vertical scale by 1% 
-		if (abs(vCheck-verticalResCH2*8)<verticalResCH2*8*0.01) or (vCheck>verticalResCH2*8):
-			#Multiple step rescale process
-			if k!=0:
-				j=0
-			if j==0: #try little adjustments
-				print("Clipping detected; rescaling CH2 resolution...")
-				verticalResCH2=verticalResCH2*1.01
-			if j>3:  #if we are far from the solution
-				verticalResCH2=verticalResCH2*1.20
-				j=1
-			scope.write("CHANnel2:SCALe ",str(verticalResCH2))          #set CH2 vertical resoultion
-			scope.write("CHANnel2:OFFSet ",str(-verticalResCH2*4*0.99)) #set CH2 offset
-			j=j+1
-
-		elif vCheck<verticalResCH2*2: #if resolution is too low
-			if j!=0:
-				k=0
-			if k==0: #try little adjustments
-				print("Resolution too low; rescaling CH2 resolution...")
-			verticalResCH2=verticalResCH2*0.90
-			scope.write("CHANnel2:SCALe ",str(verticalResCH2))          #set CH2 vertical resoultion
-			scope.write("CHANnel2:OFFSet ",str(-verticalResCH2*4*0.99)) #set CH2 offset
-			k=k+1
+	while(1):		
+		#Check for over or under-resolution (clipping or too low resolution)
+		time.sleep(1.5)
+		vRead = float(scope.query("MEASure:ITEM? VMAX,CHANnel2")) #read voltage
+		if vRead<realVerticalResCH2*4 or vRead>realVerticalResCH2*7.90: #clipping
+			verticalResCH2=numpy.round(vRead/8*1.3,2)
 		else:
 			break
-	
-	
-		
+		if timeDelay<fixedTimeDelay:
+			timeDelay = fixedTimeDelay 
+		oldScale = float(scope.query("CHANnel2:SCALe?"))            #check last scale
+		scope.write("CHANnel2:SCALe ",str(verticalResCH2))          #set the vertical scale
+		realVerticalResCH2=float(scope.query("CHANnel2:SCALe?"))    #check setted value
+		scope.write("CHANnel2:OFFSet ",str(-realVerticalResCH2*4*0.99)) #set the offset near 0 at the bottom of the screen
+		if oldScale == realVerticalResCH2: #if nothing changed we are in a dangerous loop and we need to exit 
+			break
 
 	'''TAKE THE MEASUREMENT'''
 	time.sleep(timeDelay)						#Time delay - wait for measaurement
@@ -249,7 +232,6 @@ while i < freqSteps:
 	CH2VMax[i] = scope.query("MEASure:ITEM? VMAX,CHANnel2")			#Read and save CH2 VMax
 	PHASE[i] = scope.query("MEASure:ITEM? RPHase,CHANnel2,CHANnel1")#read phase between CH1 and CH2
 	
-	print(numpy.floor(100*((i+1)/freqSteps)),"% - Analyzing ",numpy.round(freqVect[i],2)," Hz")   #print completed process percentage
 	i = i + 1							#Increment index
 
 print("\nMEASURE COMPLETED")
@@ -259,7 +241,7 @@ db = 20*numpy.log10(CH2VMax/CH1VMax)	#Compute db
 
 '''PLOTS'''
 fig,(f1,f2)=plt.subplots(2,sharex=True)
-plt.ion()
+#plt.ion()
 
 '''Amplitude plot'''
 f1.plot(freqVect,db)			                       
