@@ -223,7 +223,7 @@ while i < freqSteps:
 		time.sleep(timeDelay)
 		vRead = float(scope.query("MEASure:ITEM? VMAX,CHANnel2")) #read voltage
 		if vRead<realVerticalResCH2*4 or vRead>realVerticalResCH2*7.90: #clipping
-			verticalResCH2=numpy.round(vRead/8*1.3,2)
+			verticalResCH2=numpy.round(vRead/8*1.3,4)
 			#print("Clip or undervoltage")
 		else:
 			break
