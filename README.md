@@ -1,5 +1,5 @@
-#RIGOL DS1054Z - FEELTECH FY32xx AUTOMATED FREQUENCY RESPONSE ANALYSIS
-###Francesco Nastrucci - frenzi37i - 10/01/2021
+# RIGOL DS1054Z - FEELTECH FY32xx AUTOMATED FREQUENCY RESPONSE ANALYSIS
+### Francesco Nastrucci - frenzi37i - 10/01/2021
 
 FORK OF https://github.com/ailr16/BodePlot-DS1054Z
 Original project by ailr16.
