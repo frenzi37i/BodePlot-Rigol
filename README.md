@@ -11,7 +11,7 @@ TESTED ON WINDOWS ONLY
 * Verbose CmdLine user interface
 * Average acquisition mode, with 2 waves average (for f>2Hz) or high resolution mode (for f<2Hz)
 *	Logaritmic or linear frequencies span 
-*	Automated setup
+*	Automated instruments setup
 *	Automated restore of the previous scope's settings
 *	Automated fine adjustment of the vertical scale for maximized voltage sensitivity, with clipping detection 
 *	Sense measurements anomalies, and redo the affected measurements. If anomaly are still present,
