@@ -31,3 +31,9 @@ rm.list_resources()
 You have to find something like this: 
 USB0::0x1AB1::0x04CE::DS1ZA223107793::INSTR
 
+## Needed packages
+* matplotlib
+* numpy 
+* pyvisa
+* feeltech
+
