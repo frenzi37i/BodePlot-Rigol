@@ -8,12 +8,12 @@ TESTED ON WINDOWS ONLY
 
 ## Features
 *	Amplitude and phase semilogarithmic plots
-* Average acquisition mode, with 2 waves average (for f>2Hz) or high resolution mode (for f<2Hz)
+*       Average acquisition mode, with 2 waves average (for f>2Hz) or high resolution mode (for f<2Hz)
 *	Logaritmic or linear frequencies span 
 *	Automated setup
 *	Automated restore of the previous scope's settings
 *	Automated fine adjustment of the vertical scale for maximized voltage sensitivity, with clipping detection 
-*       Sense measurements anomalies, and redo the affected measurements. If anomaly are still present,
+*	Sense measurements anomalies, and redo the affected measurements. If anomaly are still present,
 	data are plotted anyway but the affected ones are highlighted with a red octagon. 
 __________________________________________________________________________________
 ## Use 
