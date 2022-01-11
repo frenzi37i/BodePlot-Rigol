@@ -16,6 +16,7 @@ TESTED ON WINDOWS ONLY
 *	Automated fine adjustment of the vertical scale for maximized voltage sensitivity, with clipping detection 
 *	Sense measurements anomalies, and redo the affected measurements. If anomaly are still present,
 	data are plotted anyway but the affected ones are highlighted with a red octagon. 
+* For very low amplitude values (vpeak<3.5mV) phases measurements are considered not accurate and are marked with yellow circle in the phase plot
 __________________________________________________________________________________
 ## Use 
 * GPIB drivers are needed. 
