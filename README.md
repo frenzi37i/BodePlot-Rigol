@@ -5,7 +5,7 @@ FORK OF https://github.com/ailr16/BodePlot-DS1054Z
 Original project by ailr16.
 
 ## Features
-* Amplitude and phase semilogarithmic plots
+* Amplitude and phase semilogarithmic bode plots
 * Average acquisition mode, with 4 waves average
 * Logaritmic or linear frequencies span 
 * Automated instruments setup
@@ -30,4 +30,10 @@ rm.list_resources()
 ```
 You have to find something like this: 
 USB0::0x1AB1::0x04CE::DS1ZA223107793::INSTR
+
+## Needed packages
+* matplotlib
+* numpy 
+* pyvisa
+* feeltech
 
