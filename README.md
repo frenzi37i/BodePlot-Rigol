@@ -5,14 +5,13 @@ FORK OF https://github.com/ailr16/BodePlot-DS1054Z
 Original project by ailr16.
 
 ## Features
-* Amplitude and phase semilogarithmic bode plots
-* Average acquisition mode, with 4 waves average
-* Logaritmic or linear frequencies span 
-* Automated instruments setup
-* Automated restore of the previous acquisition settings
-* Automated fine adjustment of the vertical scale, for maximized voltage sensitivity, with clipping detection 
-* Each measurements is done in a fixed time of 5 seconds; for lower frequencies the measurement time is automatically increased in order to acquire at least 4 complete screen
-________________________________________________________________________________________________
+Features: 
+*	Amplitude and phase semilogarithmic plots
+* Average acquisition mode, with 2 waves average (for f>2Hz) or high resolution mode (for f<2Hz)
+*	Logaritmic or linear frequencies span 
+*	Automated setup
+*	Automated restore of the previous scope's settings
+*	Automated fine adjustment of the vertical scale, for maximized voltage sensitivity, with clipping detection __________________________________________________________________________________
 ## Use 
 * GPIB drivers are needed. 
 * Connect both scope and signal generator to PC with usb cables. 
