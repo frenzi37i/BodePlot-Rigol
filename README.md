@@ -5,7 +5,7 @@ FORK OF https://github.com/ailr16/BodePlot-DS1054Z
 Original project by ailr16.
 
 ## Features
-* Amplitude and phase semilogarithmic plots
+* Amplitude and phase semilogarithmic bode plots
 * Average acquisition mode, with 4 waves average
 * Logaritmic or linear frequencies span 
 * Automated instruments setup
