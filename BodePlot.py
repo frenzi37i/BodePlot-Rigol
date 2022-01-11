@@ -54,6 +54,7 @@ sigGenCOMPort = 'COM19' #USB Serial port for the FeelTech FY32xx
 
 
 from numpy.core.fromnumeric import mean
+from numpy.lib.arraysetops import ediff1d
 import pyvisa
 import feeltech
 import time
@@ -92,7 +93,7 @@ def readUserSettings():
 	endFreq = cmnd("End frequency [Hz]? ",startFreq+0.5,10*10**6,'f')
 	freqSteps = cmnd("Number of steps? ",2,10000,'i')
 	logAnalysis = cmnd("Frequency sweep = LINEAR [0] or LOGARITHMIC[1] ? ",0,1,'i')
-	vpp = cmnd("Peak to Peak generated voltage? [V] ",0.01,20,'f')
+	vpp = cmnd("Peak to Peak generated voltage? [V] ",0.05,20,'f')
 	waveVMax = vpp/2	
 	return [startFreq,endFreq,freqSteps,waveVMax,logAnalysis]
 
@@ -264,20 +265,40 @@ def MEASURE(scope,c1,i,freqVect,fixedTimeDelay,lastScale):
 	return [CH1VMax,CH2VMax,PHASE]
 
 ######################################################################################
+'''UNDER VOLTAGE DETECTION'''
+def underVDetect(CH2VMax):
+	#detect if there are measured voltage under 3.5mV
+	elem = []
+	for i,e in enumerate(CH2VMax):
+		if e<0.0035:
+			elem.append(i)
+	return elem
+
+######################################################################################
 '''ANOMALY DETECTION'''
-def anomalyDetect(PHASE):
-	#Phase data are heavily wrong when readings fail, so we check for anomaly in phase
+def anomalyDetect(PHASE,underVElem):
+	#Phase data are heavily wrong when readings fail, so we check for anomaly in phase; 
+	#we avoid elements with too lower voltage, because thier phases are unreliable; these elements are not marked as anomalies
 	detect = False
 	elements =[]
-	for i,elem in enumerate(PHASE):
-		if abs(elem)>abs(mean(numpy.delete(PHASE,i)))*20:  #If the current phase is greater than 20 times the mean of the phase array without this value, this is an anomaly
-			detect = True	
-			elements.append(i)
+	for i,elem in enumerate(PHASE): #fer all the elements in phase array 
+		#check if this element is an undervoltage one
+		isUV=False
+		for e in underVElem:
+			if i==e:
+				isUV=True
+
+		if isUV == False: #If this is not an undervoltage element, we can check if this is an outlier
+			PH = numpy.delete(PHASE,numpy.concatenate(([i],numpy.array(underVElem)))); #delete current element and undervoltage ones from the buffer vector
+			if abs(elem)>abs(mean(PH))*20:  #If the current phase is greater than 20 times the mean of the phase array without this value, this is an anomaly
+				detect = True	
+				elements.append(i)
+	
 	return [detect,elements]
 
 ######################################################################################
 '''PLOT FUNCTION'''
-def plots(freqVect,db,PHASE,detectAnomaly,elementsAnomaly):
+def plots(freqVect,db,PHASE,detectAnomaly,elementsAnomaly,elementUV):
 	print("Plotting...")
 	fig,(f1,f2)=plt.subplots(2,sharex=True)
 	#plt.ion()
@@ -293,8 +314,12 @@ def plots(freqVect,db,PHASE,detectAnomaly,elementsAnomaly):
 
 	'''Plot anomaly indicators if anomaly present'''
 	if detectAnomaly == True: 
-		f1.plot(freqVect[elementsAnomaly],db[elementsAnomaly],marker='H',color='r')
-		f2.plot(freqVect[elementsAnomaly],PHASE[elementsAnomaly],marker='H',color='r')
+		f1.plot(freqVect[elementsAnomaly],db[elementsAnomaly],marker='H',color='r',linestyle = 'None')
+		f2.plot(freqVect[elementsAnomaly],PHASE[elementsAnomaly],marker='H',color='r',linestyle = 'None')
+
+	'''Plot undervoltages unreliables phases'''
+	if len(elementUV) > 0: 
+		f2.plot(freqVect[elementUV],PHASE[elementUV],marker='o',color='y',linestyle = 'None')
 
 	f1.grid(True)
 	f2.grid(True)
@@ -375,8 +400,12 @@ def main():
     
 	db = 20*numpy.log10(CH2VMax/CH1VMax)	#Compute db
 	
+	'''TOO LOW AMPLITUDE VALUE DETECTION'''
+	#If amplitude is too low (<2mV), phase detection is unreliable, so anomaly detection have to discard those values
+	underVElem = underVDetect(CH2VMax) 
+
 	'''ANOMALY DETECTION'''	
-	[detect,elements] = anomalyDetect(PHASE)   #Check for anomaly in calculated data
+	[detect,elements] = anomalyDetect(PHASE,underVElem)   #Check for anomaly in calculated data based on phase values, avoiding usigng measuremnt with voltage lower than 2mV
 
 	if detect ==True: 
 		print("Detected anomalies for measurements: ",elements,"\nTrying to redo these measurements lowering the trigger.")
@@ -387,7 +416,7 @@ def main():
 			for i in elements: 
 				[CH1VMax[i],CH2VMax[i],PHASE[i]] = MEASURE(scope,c1,i,freqVect,fixedTimeDelay,lastScale) #Try to retake failed measurements
 
-			[detect,newElements] = anomalyDetect(PHASE) #recheck for anomaly detect
+			[detect,newElements] = anomalyDetect(PHASE,underVElem) #recheck for anomaly detect
 
 			if detect == True: #if anomaly detected again
 				if newElements == elements:  #if are the same ones, exit from the cycle.
@@ -407,7 +436,7 @@ def main():
 
 	originalSettings('restore',scope,readedParam) #restore scope's original settings
 
-	plots(freqVect,db,PHASE,detect,elements) 	#plot frequency response diagrams
+	plots(freqVect,db,PHASE,detect,elements,underVElem) 	#plot frequency response diagrams
 	
 	scope.close()								#Stop communication with oscilloscope
 
