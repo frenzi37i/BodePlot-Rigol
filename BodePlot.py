@@ -7,14 +7,12 @@ Original project by ailr16.
 
 Features: 
 > 	Amplitude and phase semilogarithmic plots
->   Average acquisition mode, with 4 waves average
+>   Average acquisition mode, with 2 waves average
 	TODO: CHECK AVERAGE MODE FOR f<1hz
 >	Logaritmic or linear frequencies span 
 >	Automated setup
->	Automated restore of the previous acquisition settings
+>	Automated restore of the previous scope's settings
 >	Automated fine adjustment of the vertical scale, for maximized voltage sensitivity, with clipping detection 
->   Each measurements is done in a fixed time of 5 seconds; for lower frequencies the measurement 
-	time is automatically increased in order to acquire at least 4 complete screen
 
 ________________________________________________________________________________________________
 Use: 
@@ -38,6 +36,14 @@ ________________________________________________________________________________
 
 '''
 
+###################################################################################
+###############################  USER SETTINGS ####################################
+# INSTRUMENTS CONNECTIONS PORT
+scopeAddress='USB0::0x1AB1::0x04CE::DS1ZA223107793::INSTR' #Rigol 1054Z Address
+sigGenCOMPort = 'COM19' #USB Serial port for the FeelTech FY32xx
+###################################################################################
+
+
 from numpy.core.fromnumeric import mean
 import pyvisa
 import feeltech
@@ -45,6 +51,43 @@ import time
 import numpy
 import matplotlib.pyplot as plt
 import math
+
+######################################################################################
+'''READ USER SETTINGS FROM CMD LINE'''
+def cmnd(text,lval,uval,TYpe):  #checks user inputted values
+	while(1):
+		val = input(text)
+		
+		try:
+			if TYpe=='f':
+				if float(val)<lval or float(val)>uval:	
+					print("Inputted value is out of bound; [",lval,",",uval,"]")
+				else:
+					return float(val)
+			if TYpe=='i':
+				if int(val)<lval or int(val)>uval:	
+					print("Inputted value is out of bound; [",lval,",",uval,"]")
+				else:
+					return int(val)
+		except:
+			if TYpe=='i':
+				t='integer'
+			else:
+				t=''
+			print("Inputted value must be a",t,"number!")
+
+def readUserSettings():
+	print("\n     ANALYSIS SETUP     ")
+	print("-"*25)
+	startFreq = cmnd("Start frequency [Hz]? ",0.2,10*10**6,'f')
+	endFreq = cmnd("End frequency [Hz]? ",startFreq+0.5,10*10**6,'f')
+	freqSteps = cmnd("Number of steps? ",2,10000,'i')
+	logAnalysis = cmnd("Frequency sweep = LINEAR [0] or LOGARITHMIC[1] ? ",0,1,'i')
+	vpp = cmnd("Peak to Peak generated voltage? [V] ",0.01,20,'f')
+	waveVMax = vpp/2	
+	return [startFreq,endFreq,freqSteps,waveVMax,logAnalysis]
+
+######################################################################################
 
 ''' SCOPE'S ORIGINAL SETTINGS BACKUP AND RESTORE FUNCTION'''
 def originalSettings(cmd,scope,readedParam):
@@ -99,7 +142,6 @@ def originalSettings(cmd,scope,readedParam):
 def scopeSetup(scope,waveVMax):
 	print("Scope setup...") #verbosity
     
-	scope.write("ACQuire:MDEPth AUTO")      #set automatic memory depth
 
 	'''VOLTAGE MEASUREMENTS'''
 	scope.write("MEASure:CLEar ALL")				     #Clear all measurement items
@@ -108,7 +150,7 @@ def scopeSetup(scope,waveVMax):
 	scope.write("MEASure:ITEM RPHase,CHANnel2,CHANnel1") #Create the phase measurement between CH2 and CH1
 
 	'''ACQUISITION MODE SETUP'''
-	#scope.write("ACQuire:TYPE AVERages") 		#set acquisition mode on average
+	scope.write("ACQuire:MDEPth AUTO")      #set automatic memory depth
 	scope.write("ACQuire:AVERages 2") 			#Set 2 cycle average 
 
 	'''CHANNEL COUPLING SETUP'''
@@ -181,55 +223,14 @@ def plots(freqVect,db,PHASE):
 ######################################################################################
 
 def main():
-	###################################################################################
-	###############################  USER SETTINGS ####################################
-	# ANALYSIS PARAMETERS 
-	startFreq = 2   	#Start frequency [Hz]
-	endFreq = 15  	#Stop frequency [Hz]
-	freqSteps = 10   	#Number of frequencies steps
-	waveVMax = 5 	 	#Wave Max Voltage
-	logAnalysis = True	#Log spaced frequencis if True, Linearly spaced frequencies if false
+	global scopeAddress
+	global sigGenCOMPort
+
+	print("\n########### FREQUENCY RESPONSE ANALYSIS SCRIPT #############")	
+
+	[startFreq,endFreq,freqSteps,waveVMax,logAnalysis]=readUserSettings()  #read settings from user with error checks
 
 	fixedTimeDelay = 3  #Adjust the time delay between frequency increments [s]
-
-	# INSTREUMENTS CONNECTIONS PORT
-	scopeAddress='USB0::0x1AB1::0x04CE::DS1ZA223107793::INSTR' #Rigol 1054Z Address
-	sigGenCOMPort = 'COM19' #USB Serial port for the FeelTech FY32xx
-
-	###################################################################################
-
-	print("\n########### FREQUENCY RESPONSE ANALYSIS SCRIPT #############")
-
-	''' USER INPUTTED VALUES CHECK '''
-	if startFreq < 0.5:
-		print('ERROR. Frequency must be greater than 0.5 Hz')
-		print('Please press Enter to exit :-(')
-		input()
-		exit()
-
-	if startFreq < 0 or endFreq < 0:
-		print('ERROR. Frequency must be positive')
-		print('Please press Enter to exit :-(')
-		input()
-		exit()
-
-	if startFreq > endFreq:
-		print('ERROR. Start Frequency must be less than End Frequency')
-		print('Please press Enter to exit:-(')
-		input()
-		exit()
-
-	if freqSteps <= 1:
-		print('ERROR. Frequency steps must be greater than 1')
-		print('Please press Enter to exit :-(')
-		input()
-		exit()
-		
-	if waveVMax <= 0:
-		print('ERROR. Max Voltage must be greater than zero')
-		print('Please press Enter to exit :-(')
-		input()
-		exit()
 
 	'''VECTORS INITIALIZATION'''
 	CH1VMax = numpy.zeros(freqSteps)				#Create an array for CH1 measurements
@@ -247,7 +248,7 @@ def main():
 		freqVect = numpy.linspace(startFreq,endFreq,freqSteps,endpoint=True)
 
 	''' FUNCTION GENERATOR CONNECTION and SETUP'''
-	print("Connecting to signal generator...")
+	print("_"*30,"\nConnecting to signal generator...")
 	try: 
 		ft = feeltech.FeelTech(sigGenCOMPort)       #Connect FeelTech signal generator
 		c1 = feeltech.Channel(1,ft)					#Init the CH1 of generator
@@ -271,12 +272,13 @@ def main():
 	print("Scope connected")	
 	readedParam = originalSettings('backup',scope,[]) #backup scope settings
 	[verticalResCH1,verticalResCH2] = scopeSetup(scope, waveVMax) #setup scope
-	print("done.")
+	print("Setup completed.")
 
 	'''MEASUREMENTS'''
-	print("\nStarting measurements\nWait for scope to settle...")
+	print("_"*30)
+	print("Starting measurements\nWait for scope to settle...")
 	time.sleep(fixedTimeDelay)					#Time delay
-	print("_________________________\nMeasure started")
+	print("MEASUREMENT STARTED")
     
 	i = 0
 	while i < freqSteps:
@@ -333,7 +335,8 @@ def main():
 		lastScale[i]=verticalResCH2; #save last vertical scale
 		i = i + 1							#Increment index
 
-	print("MEASURE COMPLETED\n_________________________") 			#verbosity
+	print("MEASUREMENT COMPLETED") 			#verbosity
+	print("_"*30)
 
 	db = 20*numpy.log10(CH2VMax/CH1VMax)	#Compute db
 
