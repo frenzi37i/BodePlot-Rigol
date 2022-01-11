@@ -4,6 +4,8 @@
 FORK OF https://github.com/ailr16/BodePlot-DS1054Z
 Original project by ailr16.
 
+TESTED ON WINDOWS
+
 ## Features
 *	Amplitude and phase semilogarithmic plots
 * Average acquisition mode, with 2 waves average (for f>2Hz) or high resolution mode (for f<2Hz)
