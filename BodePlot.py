@@ -67,7 +67,8 @@ def originalSettings(cmd,scope,readedParam):
 		["TRIGger:EDGe:SOURce","S"],
 		["TRIGger:EDGe:SLOpe","S"],
 		["TRIGger:EDGe:LEVel","N"],
-		["TIMebase:MAIN:SCAle","N"]
+		["TIMebase:MAIN:SCAle","N"],
+		["ACQuire:MDEPth","S"]
 	]
 
 	for i,[p,Type] in enumerate(param):
@@ -93,9 +94,12 @@ def originalSettings(cmd,scope,readedParam):
 	return readedParam
 
 ######################################################################################
+
 '''SCOPE SETUP'''
 def scopeSetup(scope,waveVMax):
 	print("Scope setup...") #verbosity
+    
+	scope.write("ACQuire:MDEPth AUTO")      #set automatic memory depth
 
 	'''VOLTAGE MEASUREMENTS'''
 	scope.write("MEASure:CLEar ALL")				     #Clear all measurement items
@@ -104,7 +108,7 @@ def scopeSetup(scope,waveVMax):
 	scope.write("MEASure:ITEM RPHase,CHANnel2,CHANnel1") #Create the phase measurement between CH2 and CH1
 
 	'''ACQUISITION MODE SETUP'''
-	scope.write("ACQuire:TYPE AVERages") 		#set acquisition mode on average
+	#scope.write("ACQuire:TYPE AVERages") 		#set acquisition mode on average
 	scope.write("ACQuire:AVERages 2") 			#Set 2 cycle average 
 
 	'''CHANNEL COUPLING SETUP'''
@@ -137,7 +141,22 @@ def scopeSetup(scope,waveVMax):
 	scope.write("RUN")
 
 	return [verticalResCH1,verticalResCH2]
-
+######################################################################################
+'''HORIZONTAL RESOLUTION'''
+def setHorizRes(scope,freq,nT):
+	#Write scope horizontal resolution and return real setted value. 
+	#It needs: scope object, frequency of the sine wanted, number of period to visualize
+	horizDiv = 12
+	scope.write("TIMebase:MAIN:SCAle "+ str(nT/(horizDiv*freq)))	#Set the horizontal scale of oscilloscope 
+	currScale = float(scope.query("TIMebase:MAIN:SCAle?"))  #read the real setted scale
+	return currScale
+######################################################################################
+'''CH2 VERTICAL RESOLUTION AND ZERO OFFSET'''
+def setCH2(scope,res):
+			scope.write("CHANnel2:SCALe ",str(res))          #set the vertical scale
+			res = float(scope.query("CHANnel2:SCALe?"))      #read setted scale
+			scope.write("CHANnel2:OFFSet ",str(-res*4*0.99)) #set the offset near 0 at the bottom of the screen
+			return res   									 #return setted scale
 ######################################################################################
 '''PLOTS FUNCTION'''
 def plots(freqVect,db,PHASE):
@@ -165,9 +184,9 @@ def main():
 	###################################################################################
 	###############################  USER SETTINGS ####################################
 	# ANALYSIS PARAMETERS 
-	startFreq = 5   	#Start frequency [Hz]
-	endFreq = 100  	#Stop frequency [Hz]
-	freqSteps = 5   	#Number of frequencies steps
+	startFreq = 2   	#Start frequency [Hz]
+	endFreq = 15  	#Stop frequency [Hz]
+	freqSteps = 10   	#Number of frequencies steps
 	waveVMax = 5 	 	#Wave Max Voltage
 	logAnalysis = True	#Log spaced frequencis if True, Linearly spaced frequencies if false
 
@@ -246,7 +265,7 @@ def main():
 	try:
 		scope = rm.open_resource(scopeAddress) #connect the scope
 	except:
-		print("Scope connection failed. CHheck scope address.")
+		print("Scope connection failed. Check scope address.")
 		input()
 		exit()
 	print("Scope connected")	
@@ -258,7 +277,7 @@ def main():
 	print("\nStarting measurements\nWait for scope to settle...")
 	time.sleep(fixedTimeDelay)					#Time delay
 	print("_________________________\nMeasure started")
-
+    
 	i = 0
 	while i < freqSteps:
 		print(numpy.floor(100*((i+1)/freqSteps)),"% - Analyzing ",numpy.round(freqVect[i],2)," Hz")   #print completed process percentage
@@ -266,58 +285,52 @@ def main():
 		'''FREQUENCY AND HORIZONTAL SCALE SETUP'''
 		freq = freqVect[i]                      #Set frequency 
 		c1.frequency(freq)						#Set CH1 (gen) frequency 
-		scope.write("TIMebase:MAIN:SCAle "+ str(1/(3*freq)))	#Set the horizontal scale of oscilloscope for at least 4 period view
-		currScale = float(scope.query("TIMebase:MAIN:SCAle?"))  #read the real setted scale
-		timeDelay = currScale*12*4  #calculate the sleep time for this frequency = 4 time a full screen acquisition (because we are averaging values over 4 acquisitions) 
+		currHScale  = setHorizRes(scope,freq,2) #Set horizontal resolution for see 2 periods and read back truly adopted resolution
+		scope.write("ACQuire:TYPE HRESolution") #set acquisition mode on high resolution only for CH2 autoscale
 
-		#If the calculated value is less than the fixed one, use the fixed one; otherway use the calculated one
+		timeDelay = currHScale*12*2*1.5  #calculate the sleep time for this frequency, for 2 cycles on screen + 50%
+		#If the calculated value is less than 1 second, use 1 second
 		if timeDelay<fixedTimeDelay:
 			timeDelay = fixedTimeDelay 
 
 		'''AUTOSCALE CH2 VERTICAL SCALE'''
-		#print("Adjusting CH2 vertical scale...") #verbosity
 		#Set CH2 vertical scale to the maximum voltage, and reference at the bottom of the screen
-		if i>1: #after 2 cycles, starts from the mean value
-			verticalResCH2=(lastScale[i-2]+lastScale[i-1])/2
-			scope.write("CHANnel2:SCALe ",str(verticalResCH2))          #set the vertical scale
-			realVerticalResCH2 = float(scope.query("CHANnel2:SCALe?"))
-			scope.write("CHANnel2:OFFSet ",str(-realVerticalResCH2*4*0.99)) #set the offset near 0 at the bottom of the screen
-		else:
+		if i<1:  #set starting value for the first 2 cycle
 			scope.write("CHANnel2:SCALe 10")  
 			scope.write("CHANnel2:OFFSet -38")
+		else: #after 2 cycles, starts from the mean value of the last 2 elements for a faster settling
+			verticalResCH2=(lastScale[i-2]+lastScale[i-1])/2
+			verticalResCH2=setCH2(scope,verticalResCH2) #set channel 2 resolution and zero offset
 
-		time.sleep(1)
-		vRead = float(scope.query("MEASure:ITEM? VMAX,CHANnel2")) #first reading 
-		verticalResCH2=numpy.round(vRead/8*2,2)
-		scope.write("CHANnel2:SCALe ",str(verticalResCH2))          #set the vertical scale
-		realVerticalResCH2 = float(scope.query("CHANnel2:SCALe?"))
-		scope.write("CHANnel2:OFFSet ",str(-realVerticalResCH2*4*0.99)) #set the offset near 0 at the bottom of the screen
+		time.sleep(1) 
+		vRead = float(scope.query("MEASure:ITEM? VMAX,CHANnel2"))  #first reading 
+		verticalResCH2=numpy.round(vRead/8*1.5,2)                  #first adjustment try ad 60% the teoretical resolution
+		verticalResCH2 = setCH2(scope,verticalResCH2)              #set resolution
 		
 		while(1):		
-			#Check for over or under-resolution (clipping or too low resolution)
+			#Check for over or under-resolution (clipping or too low resolution) with a shorter horizontale scale then the real measurmentes (for faster settling)
 			time.sleep(timeDelay)
 			vRead = float(scope.query("MEASure:ITEM? VMAX,CHANnel2")) #read voltage
-			if vRead<realVerticalResCH2*4 or vRead>realVerticalResCH2*7.90: #clipping
+			if vRead<verticalResCH2*4 or vRead>verticalResCH2*7.90: #respectively undervoltage and clipping
 				verticalResCH2=numpy.round(vRead/8*1.3,4)
 				#print("Clip or undervoltage")
 			else:
 				break
 			if verticalResCH2<0.001: #check for minimum limits
 				verticalResCH2=0.001 
-			oldScale = float(scope.query("CHANnel2:SCALe?"))            #check last scale
-			scope.write("CHANnel2:SCALe ",str(verticalResCH2))          #set the vertical scale
-			realVerticalResCH2=float(scope.query("CHANnel2:SCALe?"))    #check setted value
-			scope.write("CHANnel2:OFFSet ",str(-realVerticalResCH2*4*0.99)) #set the offset near 0 at the bottom of the screen
-			if oldScale == realVerticalResCH2: #if nothing changed we are in a dangerous loop and we need to exit 
+			oldScale = float(scope.query("CHANnel2:SCALe?"))            #save last scale
+			verticalResCH2 = setCH2(scope,verticalResCH2)               #set the resolution
+			if oldScale == verticalResCH2: #if nothing changed we can't improve the scale and we have to exit
 				break
 
 		'''TAKE THE MEASUREMENT'''
-		time.sleep(0.5)						#Time delay - wait for measaurement
+		scope.write("ACQuire:TYPE AVERages")   #set acquisition mode on average for taking measurements
+		time.sleep(timeDelay) #let the scope settle down
 		CH1VMax[i] = scope.query("MEASure:ITEM? VMAX,CHANnel1")			#Read and save CH1 VMax
 		CH2VMax[i] = scope.query("MEASure:ITEM? VMAX,CHANnel2")			#Read and save CH2 VMax
 		PHASE[i] = scope.query("MEASure:ITEM? RPHase,CHANnel2,CHANnel1")#read phase between CH1 and CH2
 		
-		lastScale[i]=realVerticalResCH2; #save last vertical scale
+		lastScale[i]=verticalResCH2; #save last vertical scale
 		i = i + 1							#Increment index
 
 	print("MEASURE COMPLETED\n_________________________") 			#verbosity
