@@ -1,38 +1,47 @@
 '''
-RIGOL DS1054Z - FEELTECH FY32xx AUTOMATED FREQUENCY RESPONSE ANALYSIS
-Francesco Nastrucci - frenzi37i - 10/01/2021
+# RIGOL DS1054Z - FEELTECH FY32xx AUTOMATED FREQUENCY RESPONSE ANALYSIS
+### Francesco Nastrucci - frenzi37i - 10/01/2021
 
 FORK OF https://github.com/ailr16/BodePlot-DS1054Z
 Original project by ailr16.
 
-Features: 
-> 	Amplitude and phase semilogarithmic plots
->   Average acquisition mode, with 2 waves average
-	TODO: CHECK AVERAGE MODE FOR f<1hz
->	Logaritmic or linear frequencies span 
->	Automated setup
->	Automated restore of the previous scope's settings
->	Automated fine adjustment of the vertical scale, for maximized voltage sensitivity, with clipping detection 
+TESTED ON WINDOWS ONLY
 
-________________________________________________________________________________________________
-Use: 
-GPIB drivers are needed. 
-Connect both scope and signal generator to PC with usb cables. 
-Connect signal generator CH1 output and scope CH1 to the Device Under Test input; 
-Connect DUT's output to scope CH2.
-Set analysis properties and instruments ports into this script before starting it.
-On windows, Feeltech Signal generator COM port can be founded under 'Device Manager->COM Ports'
-Be sure to have all the needed python packages (if not, install them with pip or anaconda)
+## Features
+*	Amplitude and phase semilogarithmic plots
+* Average acquisition mode, with 2 waves average (for f>2Hz) or high resolution mode (for f<2Hz)
+*	Logaritmic or linear frequencies span 
+*	Automated setup
+*	Automated restore of the previous scope's settings
+*	Automated fine adjustment of the vertical scale for maximized voltage sensitivity, with clipping detection 
+*       Sense measurements anomalies, and redo the affected measurements. If anomaly are still present,
+	data are plotted anyway but the affected ones are highlighted with a red octagon. 
+__________________________________________________________________________________
+## Use 
+* GPIB drivers are needed. 
+* Connect both scope and signal generator to PC with usb cables. 
+* Connect signal generator CH1 output and scope CH1 to the Device Under Test input; 
+* Connect DUT's output to scope CH2.
+* SET SCOPE ADDRESS AND SIGNAL GENERATOR SERIAL PORT into BodePlot.py script before starting it.
+* On windows, Feeltech Signal generator COM port can be founded under 'Device Manager->COM Ports'
+* Be sure to have all the needed python packages (if not, install them with pip or anaconda)
 
-In order to find your scope address, run this script:
+### To find your scope address
+While scope is connected with usb cable to the PC, run this script:
+```python
 import pyvisa
 rm = pyvisa.ResourceManager()
 rm.list_resources()
-
+```
 You have to find something like this: 
 USB0::0x1AB1::0x04CE::DS1ZA223107793::INSTR
+this is the scope address to copy into the main script.
 
-___________________________________________________________________________________________________
+## Needed packages
+* matplotlib
+* numpy 
+* pyvisa
+* feeltech
 
 '''
 
@@ -179,7 +188,7 @@ def scopeSetup(scope,waveVMax):
 	scope.write("TRIGger:SWEep NORMal")
 	scope.write("TRIGger:EDGe:SOURce CHANnel1")
 	scope.write("TRIGger:EDGe:SLOpe POSitive")
-	scope.write("TRIGger:EDGe:LEVel ",str(numpy.round(waveVMax*0.8,1)))
+	scope.write("TRIGger:EDGe:LEVel ",str(numpy.round(waveVMax*0.7,1)))
 	scope.write("RUN")
 
 	return [verticalResCH1,verticalResCH2]
@@ -199,21 +208,93 @@ def setCH2(scope,res):
 			res = float(scope.query("CHANnel2:SCALe?"))      #read setted scale
 			scope.write("CHANnel2:OFFSet ",str(-res*4*0.99)) #set the offset near 0 at the bottom of the screen
 			return res   									 #return setted scale
+
 ######################################################################################
-'''PLOTS FUNCTION'''
-def plots(freqVect,db,PHASE):
+'''MEASUREMENT FUNCTION'''
+def MEASURE(scope,c1,i,freqVect,fixedTimeDelay,lastScale):
+	'''FREQUENCY AND HORIZONTAL SCALE SETUP'''
+	freq = freqVect[i]                      #Set frequency 
+	c1.frequency(freq)						#Set CH1 (gen) frequency 
+	currHScale  = setHorizRes(scope,freq,2) #Set horizontal resolution for see 2 periods and read back truly adopted resolution
+	scope.write("ACQuire:TYPE HRESolution") #set acquisition mode on high resolution only for CH2 autoscale
+
+	timeDelay = currHScale*12*2*1.5  #calculate the sleep time for this frequency, for 2 cycles on screen + 50%
+	#If the calculated value is less than 1 second, use 1 second
+	if timeDelay<fixedTimeDelay:
+		timeDelay = fixedTimeDelay 
+
+	'''AUTOSCALE CH2 VERTICAL SCALE'''
+	#Set CH2 vertical scale to the maximum voltage, and reference at the bottom of the screen
+	if i<1:  #set starting value for the first 2 cycle
+		scope.write("CHANnel2:SCALe 10")  
+		scope.write("CHANnel2:OFFSet -38")
+	else: #after 2 cycles, starts from the mean value of the last 2 elements for a faster settling
+		verticalResCH2=(lastScale[i-2]+lastScale[i-1])/2
+		verticalResCH2=setCH2(scope,verticalResCH2) #set channel 2 resolution and zero offset
+
+	time.sleep(1) 
+	vRead = float(scope.query("MEASure:ITEM? VMAX,CHANnel2"))  #first reading 
+	verticalResCH2=numpy.round(vRead/8*1.5,2)                  #first adjustment try ad 60% the teoretical resolution
+	verticalResCH2 = setCH2(scope,verticalResCH2)              #set resolution
+	
+	while(1):		
+		#Check for over or under-resolution (clipping or too low resolution) with a shorter horizontale scale then the real measurmentes (for faster settling)
+		time.sleep(timeDelay)
+		vRead = float(scope.query("MEASure:ITEM? VMAX,CHANnel2")) #read voltage
+		if vRead<verticalResCH2*4 or vRead>verticalResCH2*7.90: #respectively undervoltage and clipping
+			verticalResCH2=numpy.round(vRead/8*1.3,4)
+			#print("Clip or undervoltage")
+		else:
+			break
+		if verticalResCH2<0.001: #check for minimum limits
+			verticalResCH2=0.001 
+		oldScale = float(scope.query("CHANnel2:SCALe?"))            #save last scale
+		verticalResCH2 = setCH2(scope,verticalResCH2)               #set the resolution
+		if oldScale == verticalResCH2: #if nothing changed we can't improve the scale and we have to exit
+			break
+
+	'''TAKE THE MEASUREMENT'''
+	scope.write("ACQuire:TYPE AVERages")   #set acquisition mode on average for taking measurements
+	time.sleep(timeDelay) #let the scope settle down
+	CH1VMax = scope.query("MEASure:ITEM? VMAX,CHANnel1")			#Read and save CH1 VMax
+	CH2VMax = scope.query("MEASure:ITEM? VMAX,CHANnel2")			#Read and save CH2 VMax
+	PHASE = scope.query("MEASure:ITEM? RPHase,CHANnel2,CHANnel1")#read phase between CH1 and CH2
+	
+	lastScale[i]=verticalResCH2; #save last vertical scale
+	return [CH1VMax,CH2VMax,PHASE]
+
+######################################################################################
+'''ANOMALY DETECTION'''
+def anomalyDetect(PHASE):
+	#Phase data are heavily wrong when readings fail, so we check for anomaly in phase
+	detect = False
+	elements =[]
+	for i,elem in enumerate(PHASE):
+		if abs(elem)>abs(mean(numpy.delete(PHASE,i)))*20:  #If the current phase is greater than 20 times the mean of the phase array without this value, this is an anomaly
+			detect = True	
+			elements.append(i)
+	return [detect,elements]
+
+######################################################################################
+'''PLOT FUNCTION'''
+def plots(freqVect,db,PHASE,detectAnomaly,elementsAnomaly):
 	print("Plotting...")
 	fig,(f1,f2)=plt.subplots(2,sharex=True)
 	#plt.ion()
 
 	'''Amplitude plot'''
-	f1.plot(freqVect,db)			                       
+	f1.plot(freqVect,db,marker='o')	
 	f1.set(xlabel='f [Hz]',ylabel='dB', title='Amplitude')
 	f1.axhline(-3,linestyle="--",color='r') #-3db horizontal line
 
 	'''Phase plot'''
-	f2.plot(freqVect,PHASE)			#Graph data
+	f2.plot(freqVect,PHASE,marker='o')			#Graph data
 	f2.set(xlabel='f [Hz]',ylabel='phase [°]', title='Phase')
+
+	'''Plot anomaly indicators if anomaly present'''
+	if detectAnomaly == True: 
+		f1.plot(freqVect[elementsAnomaly],db[elementsAnomaly],marker='H',color='r')
+		f2.plot(freqVect[elementsAnomaly],PHASE[elementsAnomaly],marker='H',color='r')
 
 	f1.grid(True)
 	f2.grid(True)
@@ -229,6 +310,14 @@ def main():
 	print("\n########### FREQUENCY RESPONSE ANALYSIS SCRIPT #############")	
 
 	[startFreq,endFreq,freqSteps,waveVMax,logAnalysis]=readUserSettings()  #read settings from user with error checks
+	
+	'''for debug
+	startFreq = 10
+	endFreq =1000
+	freqSteps = 5
+	waveVMax = 1
+	logAnalysis = True
+	'''
 
 	fixedTimeDelay = 3  #Adjust the time delay between frequency increments [s]
 
@@ -280,71 +369,47 @@ def main():
 	time.sleep(fixedTimeDelay)					#Time delay
 	print("MEASUREMENT STARTED")
     
-	i = 0
-	while i < freqSteps:
+	for i in range(0,freqSteps):
 		print(numpy.floor(100*((i+1)/freqSteps)),"% - Analyzing ",numpy.round(freqVect[i],2)," Hz")   #print completed process percentage
+		[CH1VMax[i],CH2VMax[i],PHASE[i]] = MEASURE(scope,c1,i,freqVect,fixedTimeDelay,lastScale) 	  #TAKE MEASUREMENTS
+    
+	db = 20*numpy.log10(CH2VMax/CH1VMax)	#Compute db
+	
+	'''ANOMALY DETECTION'''	
+	[detect,elements] = anomalyDetect(PHASE)   #Check for anomaly in calculated data
 
-		'''FREQUENCY AND HORIZONTAL SCALE SETUP'''
-		freq = freqVect[i]                      #Set frequency 
-		c1.frequency(freq)						#Set CH1 (gen) frequency 
-		currHScale  = setHorizRes(scope,freq,2) #Set horizontal resolution for see 2 periods and read back truly adopted resolution
-		scope.write("ACQuire:TYPE HRESolution") #set acquisition mode on high resolution only for CH2 autoscale
+	if detect ==True: 
+		print("Detected anomalies for measurements: ",elements,"\nTrying to redo these measurements lowering the trigger.")
+		#If something is fail maybe is due to a too high trigger; can try to lower it. 
+		scope.write("TRIGger:EDGe:LEVel ",str(numpy.round(waveVMax*0.2,1)))
 
-		timeDelay = currHScale*12*2*1.5  #calculate the sleep time for this frequency, for 2 cycles on screen + 50%
-		#If the calculated value is less than 1 second, use 1 second
-		if timeDelay<fixedTimeDelay:
-			timeDelay = fixedTimeDelay 
+		for j in range(1,4): #repeat meauserements at maximum 4 times if wring values are detected; then plot the graph anyway
+			for i in elements: 
+				[CH1VMax[i],CH2VMax[i],PHASE[i]] = MEASURE(scope,c1,i,freqVect,fixedTimeDelay,lastScale) #Try to retake failed measurements
 
-		'''AUTOSCALE CH2 VERTICAL SCALE'''
-		#Set CH2 vertical scale to the maximum voltage, and reference at the bottom of the screen
-		if i<1:  #set starting value for the first 2 cycle
-			scope.write("CHANnel2:SCALe 10")  
-			scope.write("CHANnel2:OFFSet -38")
-		else: #after 2 cycles, starts from the mean value of the last 2 elements for a faster settling
-			verticalResCH2=(lastScale[i-2]+lastScale[i-1])/2
-			verticalResCH2=setCH2(scope,verticalResCH2) #set channel 2 resolution and zero offset
+			[detect,newElements] = anomalyDetect(PHASE) #recheck for anomaly detect
 
-		time.sleep(1) 
-		vRead = float(scope.query("MEASure:ITEM? VMAX,CHANnel2"))  #first reading 
-		verticalResCH2=numpy.round(vRead/8*1.5,2)                  #first adjustment try ad 60% the teoretical resolution
-		verticalResCH2 = setCH2(scope,verticalResCH2)              #set resolution
-		
-		while(1):		
-			#Check for over or under-resolution (clipping or too low resolution) with a shorter horizontale scale then the real measurmentes (for faster settling)
-			time.sleep(timeDelay)
-			vRead = float(scope.query("MEASure:ITEM? VMAX,CHANnel2")) #read voltage
-			if vRead<verticalResCH2*4 or vRead>verticalResCH2*7.90: #respectively undervoltage and clipping
-				verticalResCH2=numpy.round(vRead/8*1.3,4)
-				#print("Clip or undervoltage")
+			if detect == True: #if anomaly detected again
+				if newElements == elements:  #if are the same ones, exit from the cycle.
+					print("Anomalies still present on measurements: ",elements)
+					break
+				else:   #if are new ones, try to correct them
+					print("Other anomalies detected on measurements: ",newElements,"\nTry to redo these ones")
+					elements=newElements #update element to analyze and try to reanalyze 
 			else:
-				break
-			if verticalResCH2<0.001: #check for minimum limits
-				verticalResCH2=0.001 
-			oldScale = float(scope.query("CHANnel2:SCALe?"))            #save last scale
-			verticalResCH2 = setCH2(scope,verticalResCH2)               #set the resolution
-			if oldScale == verticalResCH2: #if nothing changed we can't improve the scale and we have to exit
+				print("Anomalies resolved.") #if no more anomalies are detected, we are ok. 
 				break
 
-		'''TAKE THE MEASUREMENT'''
-		scope.write("ACQuire:TYPE AVERages")   #set acquisition mode on average for taking measurements
-		time.sleep(timeDelay) #let the scope settle down
-		CH1VMax[i] = scope.query("MEASure:ITEM? VMAX,CHANnel1")			#Read and save CH1 VMax
-		CH2VMax[i] = scope.query("MEASure:ITEM? VMAX,CHANnel2")			#Read and save CH2 VMax
-		PHASE[i] = scope.query("MEASure:ITEM? RPHase,CHANnel2,CHANnel1")#read phase between CH1 and CH2
-		
-		lastScale[i]=verticalResCH2; #save last vertical scale
-		i = i + 1							#Increment index
 
 	print("MEASUREMENT COMPLETED") 			#verbosity
-	print("_"*30)
 
-	db = 20*numpy.log10(CH2VMax/CH1VMax)	#Compute db
+	print("_"*30)
 
 	originalSettings('restore',scope,readedParam) #restore scope's original settings
 
-	plots(freqVect,db,PHASE) 				#plot frequency response diagrams
+	plots(freqVect,db,PHASE,detect,elements) 	#plot frequency response diagrams
 	
-	scope.close()							#Stop communication with oscilloscope
+	scope.close()								#Stop communication with oscilloscope
 
 	print("Done.") #verbosity
 
