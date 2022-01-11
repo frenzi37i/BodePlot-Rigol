@@ -8,7 +8,8 @@ TESTED ON WINDOWS ONLY
 
 ## Features
 *	Amplitude and phase semilogarithmic plots
-*       Average acquisition mode, with 2 waves average (for f>2Hz) or high resolution mode (for f<2Hz)
+* Verbose CmdLine user interface
+* Average acquisition mode, with 2 waves average (for f>2Hz) or high resolution mode (for f<2Hz)
 *	Logaritmic or linear frequencies span 
 *	Automated setup
 *	Automated restore of the previous scope's settings
