@@ -24,7 +24,7 @@ ________________________________________________________________________________
 * Connect DUT's output to scope CH2.
 * SET SCOPE ADDRESS AND SIGNAL GENERATOR SERIAL PORT into BodePlot.py script before starting it.
 * On windows, Feeltech Signal generator COM port can be founded under 'Device Manager->COM Ports'
-* Be sure to have all the needed python packages (if not, install them with pip or anaconda)
+* Be sure to have all the needed python packages (if not, install them with pip)
 
 ### To find your scope address
 While scope is connected with usb cable to the PC, run this script:
@@ -46,4 +46,4 @@ this is the scope address to copy into the main script.
 ## Plot example
 This is the output for an R-C low pass filter with R=1k, C=10n
 
-
+![alt text](https://github.com/frenzi37i/BodePlot-Rigol/blob/main/example_images/1k_10n_RC_LPFilt.png?raw=true)
