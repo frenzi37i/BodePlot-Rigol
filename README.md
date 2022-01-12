@@ -4,16 +4,18 @@
 TESTED ON WINDOWS ONLY
 
 ## Features
-*	Amplitude and phase semilogarithmic plots
-* Verbose CmdLine user interface
-* Average acquisition mode, with 2 waves average (for f>2Hz) or high resolution mode (for f<2Hz)
-*	Logaritmic or linear frequencies span 
-*	Automated instruments setup
-*	Automated restore of the previous scope's settings
-*	Automated fine adjustment of the vertical scale for maximized voltage sensitivity, with clipping detection 
-*	Sense measurements anomalies, and redo the affected measurements. If anomaly are still present,
-	data are plotted anyway but the affected ones are highlighted with a red octagon. 
-* For very low amplitude values (vpeak<3.5mV) phases measurements are considered not accurate and are marked with yellow circle in the phase plot
+* Amplitude and phase semilogarithmic plots
+* Average acquisition mode, with 4 waves average (for f>2Hz) or high resolution 
+   mode (for f<2Hz)
+* Logaritmic or linear frequencies span 
+* Automated setup
+* Automated restore of the previous scope's settings
+* Automated fine adjustment of the vertical scale for maximized voltage 
+   sensitivity, with clipping detection 
+* Sense triggering errors and try to correct them. If it's not possible to 
+  trigger the signal, a red octagon is plotted in amplitude and phase plots
+* For very low amplitude values (vpeak<5mV) phases measurements are considered 
+   not accurate and are marked with yellow dot in the phase plot
 __________________________________________________________________________________
 ## Use 
 * GPIB drivers are needed. 
