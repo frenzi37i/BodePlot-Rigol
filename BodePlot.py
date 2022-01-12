@@ -398,9 +398,9 @@ def plots_v2(freq_vect, db, phase, trigg_error, elementUV):
         f2.plot(freq_vect[elementUV], phase[elementUV],
                 marker='o', color='y', linestyle='None', ms=5)
 
-    f1.grid(True, which='both', ls='-', color='0.65')
-    f2.grid(True, which='both', ls='-', color='0.65')
-    plt.xscale('symlog')
+    plt.xscale('log')
+    f1.grid(True, which='both', ls='-', color='0.65', lw = 0.5)
+    f2.grid(True, which='both', ls='-', color='0.65',lw = 0.5)
     plt.show()
 
 
